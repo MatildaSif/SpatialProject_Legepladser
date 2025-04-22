@@ -1,0 +1,113 @@
+---
+title: "Playgrounds"
+output: html_document
+date: "2025-04-22"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(sf)
+library(dplyr)
+```
+
+
+```{r cars}
+# Load Playground data
+aar <- st_read("data/Aarhus_legepladser.geojson")
+frb <- st_read("data/Frederiksberg_legepladser.geojson")
+kbh<- st_read("data/København_legepladser.geojson")
+rks <- st_read("data/RingkobingSkjern_legepladser.geojson")
+sb <- st_read("data/Silkeborg_legepladser.geojson") # sb is a more than just playgrounds - need to filter
+vhl <- st_read("data/Vesthimmerland_legepladser.geojson")
+
+
+head(aar)
+head(frb)
+head(kbh)
+head(rks)
+head(sb) # filter for facilitet_type
+head(vhl)
+
+# check all different values in facilitet_type column for Silkeborg data
+unique(sb$FACILITET_TYPE)
+# filter so only "Legeplads" are remaining
+sb <- sb %>%  filter(FACILITET_TYPE == "Legeplads")
+unique(sb$FACILITET_TYPE)
+```
+
+```{r}
+# Set crs
+aar <- st_set_crs(aar, 4326)
+frb <- st_set_crs(frb, 4326)
+kbh <- st_set_crs(kbh, 4326)
+rks <- st_set_crs(rks, 4326)
+sb <- st_set_crs(sb, 4326)
+vhl <- st_set_crs(vhl, 4326)
+# check crs
+st_crs(aar)
+st_crs(frb)
+st_crs(kbh)
+st_crs(rks)
+st_crs(sb)
+st_crs(vhl)
+
+# use st_transform
+aar <- st_transform(aar, 4326)
+frb <- st_transform(frb, 4326)
+kbh <- st_transform(kbh, 4326)
+rks <- st_transform(rks, 4326)
+sb <- st_transform(sb, 4326)
+vhl <- st_transform(vhl, 4326)
+```
+
+```{r}
+# Collate playgrounds into one map
+
+## Select vital columns
+aar <- aar %>% select(geometry, adresse)
+frb <- frb %>% select(geometry, navn)
+kbh <- kbh %>% select(geometry, adressebeskrivelse)
+rks <- rks %>% select(geometry, LEVERANDOR)
+sb <- sb %>% select(geometry, VEJNAVN)
+vhl <- vhl %>% select(geometry, Adresse)
+
+## add column name with municipality
+aar <- aar %>% mutate(municipality = "Aarhus")
+frb <- frb %>% mutate(municipality = "Frederiksberg")
+kbh <- kbh %>% mutate(municipality = "København")
+rks <- rks %>% mutate(municipality = "Ringkøbing-Skjern")
+sb <- sb %>% mutate(municipality = "Silkeborg")
+vhl <- vhl %>% mutate(municipality = "Vesthimmerland")
+
+## Rename columns to be the same
+aar <- aar %>% rename(adresse = adresse)
+frb <- frb %>% rename(adresse = navn)
+kbh <- kbh %>% rename(adresse = adressebeskrivelse)
+rks <- rks %>% rename(adresse = LEVERANDOR)
+sb <- sb %>% rename(adresse = VEJNAVN)
+vhl <- vhl %>% rename(adresse = Adresse)
+
+## Combine all dataframes into one
+playgrounds <- rbind(aar, frb, kbh, rks, sb, vhl)
+playgrounds <- st_cast(playgrounds, "POINT")
+                    
+table(st_geometry_type(playgrounds))
+```
+
+```{r}
+# see leaflet map of all playgrounds
+library(leaflet)
+
+leaflet(data = playgrounds) %>%
+  addTiles() %>%
+  addCircleMarkers(popup = ~geometry)  # Replace NAME with a property from your GeoJSON
+
+```
+
+```{r}
+# Load Municipality income data
+
+# Load Municipality boundries data
+
+```
+
