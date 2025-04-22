@@ -1,0 +1,24 @@
+{
+"type": "FeatureCollection",
+"name": "Legepladser Vesthimmerland",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+"features": [
+{ "type": "Feature", "properties": { "Navn": "Bølle Bob banen, Hornum", "Arealtype": 9, "Adresse": "Jernbanegade", "postnr": 9600, "by": "Aars", "link": "0" }, "geometry": { "type": "Point", "coordinates": [ 9.423297070824889, 56.841171516059028 ] } },
+{ "type": "Feature", "properties": { "Navn": "Gatten legeplads", "Arealtype": 9, "Adresse": "Gatten stationsvej", "postnr": 9670, "by": "Løgstør", "link": "0" }, "geometry": { "type": "Point", "coordinates": [ 9.403588940896967, 56.880161417246249 ] } },
+{ "type": "Feature", "properties": { "Navn": "Vindblæs legeplads", "Arealtype": 9, "Adresse": "Stationsvej", "postnr": 9670, "by": "Løgstør", "link": "0" }, "geometry": { "type": "Point", "coordinates": [ 9.349442217918146, 56.926596431066592 ] } },
+{ "type": "Feature", "properties": { "Navn": "Legepladsen Søanlægget", "Arealtype": 9, "Adresse": "Stadion Allé 10", "postnr": 1, "by": "Legeudstyr", "link": "0" }, "geometry": { "type": "Point", "coordinates": [ 9.339310541573411, 56.775820575852933 ] } },
+{ "type": "Feature", "properties": { "Navn": "Legepladsen havneanlægget", "Arealtype": 0, "Adresse": "Havnepladsen 2d", "postnr": 9640, "by": "Farsø", "link": "0" }, "geometry": { "type": "Point", "coordinates": [ 9.192989729372025, 56.69996379141238 ] } },
+{ "type": "Feature", "properties": { "Navn": "Legeplads Limfjordsmuseet", "Arealtype": 0, "Adresse": "Fischergade 89", "postnr": 9670, "by": "Løgstør", "link": "" }, "geometry": { "type": "Point", "coordinates": [ 9.242090704336103, 56.963941742554312 ] } },
+{ "type": "Feature", "properties": { "Navn": "Trampolin Bakkerne", "Arealtype": 0, "Adresse": "Toldbogade 2", "postnr": 9670, "by": "Løgstør", "link": "" }, "geometry": { "type": "Point", "coordinates": [ 9.246946501441952, 56.967727057009483 ] } },
+{ "type": "Feature", "properties": { "Navn": "Skaterbanen", "Arealtype": 0, "Adresse": "Havnevej", "postnr": 9670, "by": "Løgstør", "link": "" }, "geometry": { "type": "Point", "coordinates": [ 9.256972517350464, 56.970225887463457 ] } },
+{ "type": "Feature", "properties": { "Navn": "V. Hornum legeplads", "Arealtype": 0, "Adresse": "Valdemarsvej 11", "postnr": 9640, "by": "Farsø", "link": "" }, "geometry": { "type": "Point", "coordinates": [ 9.357183227137062, 56.83106098942352 ] } },
+{ "type": "Feature", "properties": { "Navn": "Farsø Fitnesstrack", "Arealtype": 0, "Adresse": "Skolegade", "postnr": 9640, "by": "Farsø", "link": "" }, "geometry": { "type": "Point", "coordinates": [ 9.334154773315209, 56.771121828978281 ] } },
+{ "type": "Feature", "properties": { "Navn": "Legepladsen Lystanlægget", "Arealtype": 0, "Adresse": "Anlægsvej", "postnr": 9600, "by": "Aars", "link": "" }, "geometry": { "type": "Point", "coordinates": [ 9.519350319339525, 56.804325258112584 ] } },
+{ "type": "Feature", "properties": { "Navn": "Skøjtesøen Tarzanbane", "Arealtype": 0, "Adresse": "Tingvej 45", "postnr": 9600, "by": "Aars", "link": "" }, "geometry": { "type": "Point", "coordinates": [ 9.515978104051312, 56.807455109871768 ] } },
+{ "type": "Feature", "properties": { "Navn": "Legepladsen Gedsted stadion", "Arealtype": 0, "Adresse": "Stadionvej 1", "postnr": 9631, "by": "Gedsted", "link": "" }, "geometry": { "type": "Point", "coordinates": [ 9.333525892533427, 56.686897560670033 ] } },
+{ "type": "Feature", "properties": { "Navn": "Cykelparken", "Arealtype": 0, "Adresse": "Testrupvej 2C", "postnr": 9620, "by": "Aalestrup", "link": "" }, "geometry": { "type": "Point", "coordinates": [ 9.493159536718773, 56.696007522341255 ] } },
+{ "type": "Feature", "properties": { "Navn": "Bevægelsesparken", "Arealtype": 0, "Adresse": "Nygade 18b", "postnr": 9620, "by": "Aalestrup", "link": "" }, "geometry": { "type": "Point", "coordinates": [ 9.498713161615703, 56.691826980083199 ] } },
+{ "type": "Feature", "properties": { "Navn": "Legepladsen Lilletorv", "Arealtype": 0, "Adresse": "Vestergade 27", "postnr": 9620, "by": "Aalestrup", "link": "" }, "geometry": { "type": "Point", "coordinates": [ 9.491872911189935, 56.693777733024774 ] } },
+{ "type": "Feature", "properties": { "Navn": "Legepladsen Baneanlægget", "Arealtype": 0, "Adresse": "Busgade", "postnr": 9620, "by": "Aalestrup", "link": "" }, "geometry": { "type": "Point", "coordinates": [ 9.493479988208248, 56.695253586867224 ] } }
+]
+}
