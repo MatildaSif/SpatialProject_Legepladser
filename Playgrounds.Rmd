@@ -8,6 +8,7 @@ date: "2025-04-22"
 knitr::opts_chunk$set(echo = TRUE)
 library(sf)
 library(dplyr)
+library(leaflet)
 ```
 
 
@@ -36,13 +37,6 @@ unique(sb$FACILITET_TYPE)
 ```
 
 ```{r}
-# Set crs
-aar <- st_set_crs(aar, 4326)
-frb <- st_set_crs(frb, 4326)
-kbh <- st_set_crs(kbh, 4326)
-rks <- st_set_crs(rks, 4326)
-sb <- st_set_crs(sb, 4326)
-vhl <- st_set_crs(vhl, 4326)
 # check crs
 st_crs(aar)
 st_crs(frb)
@@ -59,6 +53,7 @@ rks <- st_transform(rks, 4326)
 sb <- st_transform(sb, 4326)
 vhl <- st_transform(vhl, 4326)
 ```
+
 
 ```{r}
 # Collate playgrounds into one map
@@ -87,25 +82,49 @@ rks <- rks %>% rename(adresse = LEVERANDOR)
 sb <- sb %>% rename(adresse = VEJNAVN)
 vhl <- vhl %>% rename(adresse = Adresse)
 
+# get centroids of multipolygons and multipoints
+aar <- aar %>%
+  mutate(geometry = st_centroid(geometry)) %>%
+  st_set_geometry("geometry")
+
+sb <- st_make_valid(sb)
+sb <- sb %>%
+  mutate(geometry = st_centroid(geometry)) %>%
+  st_set_geometry("geometry")
+
+frb <- frb %>%
+  mutate(geometry = st_centroid(geometry)) %>%
+  st_set_geometry("geometry")
+
+kbh <- kbh %>%
+  mutate(geometry = st_centroid(geometry)) %>%
+  st_set_geometry("geometry")
+
 ## Combine all dataframes into one
 playgrounds <- rbind(aar, frb, kbh, rks, sb, vhl)
+
 playgrounds <- st_cast(playgrounds, "POINT")
                     
 table(st_geometry_type(playgrounds))
 ```
 
 ```{r}
-# see leaflet map of all playgrounds
-library(leaflet)
-
-leaflet(data = playgrounds) %>%
+# create longitude and latitude columns based on point geometry
+playgrounds <- playgrounds %>% 
+  mutate(longitude = st_coordinates(geometry)[,1],
+         latitude = st_coordinates(geometry)[,2])
+  
+# create a leaflet map with markers using longitude and latitude, add markers with muncipality.
+leaflet(playgrounds) %>%
   addTiles() %>%
-  addCircleMarkers(popup = ~geometry)  # Replace NAME with a property from your GeoJSON
-
+  setView(lng = 10.2, lat = 56.2, zoom = 7) %>% 
+  addMarkers(lng = ~longitude, lat = ~latitude,
+             label = ~paste(municipality))
 ```
 
 ```{r}
 # Load Municipality income data
+muni_income <- read.csv("data/indkomst.csv")
 
 # Load Municipality boundries data
 
