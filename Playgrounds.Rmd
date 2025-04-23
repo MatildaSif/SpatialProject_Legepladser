@@ -9,6 +9,9 @@ knitr::opts_chunk$set(echo = TRUE)
 library(sf)
 library(dplyr)
 library(leaflet)
+library(geodata)
+library(terra)
+library(raster)
 ```
 
 
@@ -59,12 +62,12 @@ vhl <- st_transform(vhl, 4326)
 # Collate playgrounds into one map
 
 ## Select vital columns
-aar <- aar %>% select(geometry, adresse)
-frb <- frb %>% select(geometry, navn)
-kbh <- kbh %>% select(geometry, adressebeskrivelse)
-rks <- rks %>% select(geometry, LEVERANDOR)
-sb <- sb %>% select(geometry, VEJNAVN)
-vhl <- vhl %>% select(geometry, Adresse)
+aar <- aar %>% dplyr::select(geometry, adresse)
+frb <- frb %>% dplyr::select(geometry, navn)
+kbh <- kbh %>% dplyr::select(geometry, adressebeskrivelse)
+rks <- rks %>% dplyr::select(geometry, LEVERANDOR)
+sb <- sb %>% dplyr::select(geometry, VEJNAVN)
+vhl <- vhl %>% dplyr::select(geometry, Adresse)
 
 ## add column name with municipality
 aar <- aar %>% mutate(municipality = "Aarhus")
@@ -118,15 +121,116 @@ playgrounds <- playgrounds %>%
 leaflet(playgrounds) %>%
   addTiles() %>%
   setView(lng = 10.2, lat = 56.2, zoom = 7) %>% 
-  addMarkers(lng = ~longitude, lat = ~latitude,
+  addCircleMarkers(lng = ~longitude, lat = ~latitude, radius = 0.5,
              label = ~paste(municipality))
 ```
 
 ```{r}
 # Load Municipality income data
-muni_income <- read.csv("data/indkomst.csv")
+income <- read.csv("data/income.csv")
+income$municipality <- gsub("-", " ", income$municipality)
 
+# Load population data
+population <- read.csv("data/population.csv")
+population$municipality <- gsub("-", " ", population$municipality)
+```
+
+
+```{r}
 # Load Municipality boundries data
+gadm(country = "DNK", path = "data", level = 2, version="latest")
+muni <- readRDS("data/gadm/gadm41_DNK_2_pk.rds")
+class(muni)
+
+# convert vector to sf
+muni <- st_as_sf(muni)
+# transform crs
+muni <- st_transform(muni, crs = 4326)
+
+# check column names
+names(muni)
+head(muni) # The column with municipality names is NAME_2
+
+# recode the danish letters to match with csv files
+muni$NAME_2 <- gsub("æ", "ae", muni$NAME_2)
+muni$NAME_2 <- gsub("Æ", "Ae", muni$NAME_2)
+muni$NAME_2 <- gsub("ø", "oe", muni$NAME_2)
+muni$NAME_2 <- gsub("å", "aa", muni$NAME_2)
+muni$NAME_2 <- gsub("Å", "Aa", muni$NAME_2)
+muni$NAME_2 <- gsub("-", " ", muni$NAME_2)
+
+# plot
+leaflet() %>%
+  addTiles() %>%
+  addPolygons(data = muni, color = "blue", weight = 1, fillOpacity = 0.01)
+
+```
+Join municipality boundaries to income data
+```{r}
+# Join income data with sf municipalities object
+muni_income <- muni %>%
+  left_join(income, by = c("NAME_2" = "municipality")) 
+
+muni_income <- muni_income %>%
+  rename("municipality" = "NAME_2") %>% 
+  dplyr::select(municipality, geometry, income)
+
+# plot
+pal <- colorBin(palette = "OrRd", domain = muni_income$income, bins = 8)
+
+leaflet(muni_income) %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  # add income
+  addPolygons(fillColor = ~pal(income),
+              color = "#444444",
+              weight = 1,
+              fillOpacity = 0.5,
+              popup = ~paste(municipality, "<br>Income:", income)) %>%
+  addLegend(pal = pal, values = ~income, opacity = 0.7,
+            title = "Income",
+            position = "bottomright") %>% 
+  # add playgrounds
+  addCircleMarkers(data = playgrounds, lng = ~longitude, lat = ~latitude, radius = 0.5,
+                   label = ~paste(municipality),
+                   color = "darkblue", fillOpacity = 0.5)
+
+```
+
+Join municipality boundaries to population data
+```{r}
+# Join population data with sf municipalities object
+muni_population <- muni %>%
+  left_join(population, by = c("NAME_2" = "municipality")) 
+
+muni_population <- muni_population %>%
+  rename("municipality" = "NAME_2") %>% 
+  dplyr::select(municipality, geometry, population) %>% 
+  # make population column numeric
+  mutate(population = as.numeric(gsub(" ", "", population)))
+
+# plot
+pal <- colorBin(palette = "OrRd", domain = muni_population$population, bins = 8)
+
+leaflet(muni_population) %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  # add population
+  addPolygons(fillColor = ~pal(population),
+              color = "#444444",
+              weight = 1,
+              fillOpacity = 0.5,
+              popup = ~paste(municipality, "<br>Population:", population)) %>%
+  addLegend(pal = pal, values = ~population, opacity = 0.7,
+            title = "Population",
+            position = "bottomright") %>% 
+  # add playgrounds
+  addCircleMarkers(data = playgrounds, lng = ~longitude, lat = ~latitude, radius = 0.5,
+                   label = ~paste(municipality),
+                   color = "darkblue", fillOpacity = 0.5)
+```
+
+
+ISOCHRONES
+```{r}
 
 ```
 
