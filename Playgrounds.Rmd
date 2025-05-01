@@ -130,8 +130,15 @@ leaflet(playgrounds) %>%
 income <- read.csv("data/income.csv")
 income$municipality <- gsub("-", " ", income$municipality)
 
-# Load population data
-population <- read.csv("data/population.csv")
+# Load population data of children from 0-14 years old
+population <- read.csv("data/Child014_Population.csv")
+population$municipality <- gsub("-", " ", population$municipality)
+
+population$municipality <- gsub("æ", "ae", population$municipality)
+population$municipality <- gsub("Æ", "Ae", population$municipality)
+population$municipality <- gsub("ø", "oe", population$municipality)
+population$municipality <- gsub("å", "aa", population$municipality)
+population$municipality <- gsub("Å", "Aa", population$municipality)
 population$municipality <- gsub("-", " ", population$municipality)
 ```
 
@@ -203,24 +210,23 @@ muni_population <- muni %>%
   left_join(population, by = c("NAME_2" = "municipality")) 
 
 muni_population <- muni_population %>%
-  rename("municipality" = "NAME_2") %>% 
-  dplyr::select(municipality, geometry, population) %>% 
-  # make population column numeric
-  mutate(population = as.numeric(gsub(" ", "", population)))
+    rename("municipality" = "NAME_2") %>% 
+    dplyr::select(municipality, geometry, child_population) %>% 
+    mutate(population = as.numeric(gsub(" ", "", child_population)))
 
 # plot
-pal <- colorBin(palette = "OrRd", domain = muni_population$population, bins = 8)
+pal <- colorBin(palette = "OrRd", domain = muni_population$child_population, bins = 8)
 
 leaflet(muni_population) %>%
   addProviderTiles("CartoDB.Positron") %>%
   # add population
-  addPolygons(fillColor = ~pal(population),
+  addPolygons(fillColor = ~pal(child_population),
               color = "#444444",
               weight = 1,
               fillOpacity = 0.5,
-              popup = ~paste(municipality, "<br>Population:", population)) %>%
-  addLegend(pal = pal, values = ~population, opacity = 0.7,
-            title = "Population",
+              popup = ~paste(municipality, "<br>Child Population:", child_population)) %>%
+  addLegend(pal = pal, values = ~child_population, opacity = 0.7,
+            title = "Child Population",
             position = "bottomright") %>% 
   # add playgrounds
   addCircleMarkers(data = playgrounds, lng = ~longitude, lat = ~latitude, radius = 0.5,
@@ -228,9 +234,125 @@ leaflet(muni_population) %>%
                    color = "darkblue", fillOpacity = 0.5)
 ```
 
+MapBox Setup
+
+```{r}
+my_token <- "pk.eyJ1IjoibWF0aWxkYXNpZiIsImEiOiJjbTl2MzF0NWowZGdvMmpyMmxjbDRmZTA3In0.cELeKMY07SV3Z37zMLBIOQ"
+
+library(mapboxapi)
+mb_access_token(my_token, install = TRUE, overwrite = TRUE)
+```
+
 
 ISOCHRONES
 ```{r}
+# Use playgrounds df as the data focus sf object
+playgrounds <- st_as_sf(playgrounds, coords = c("longitude", "latitude"), crs = 4326)
+# Walking range 20 mins
+walking_isos <- mb_isochrone(
+  playgrounds,
+  profile = "walking",
+  time = 5,
+  id = "adresse"
+  )
 
+cycling_isos <- mb_isochrone(
+  playgrounds,
+  profile = "cycling",
+  time = 10,
+  id = "adresse"
+  )
+
+driving_isos <- mb_isochrone(
+  playgrounds,
+  profile = "driving",
+  time = 5,
+  id = "adresse"
+  )
+```
+
+
+```{r}
+# Plot with isochrones
+pal <- colorBin(palette = "OrRd", domain = muni_population$child_population, bins = 8)
+
+leaflet(muni_population) %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  # add population
+  addPolygons(fillColor = ~pal(child_population),
+              color = "#444444",
+              weight = 1,
+              fillOpacity = 0.5,
+              popup = ~paste(municipality, "<br>Child Population:", child_population)) %>%
+  addLegend(pal = pal, values = ~child_population, opacity = 0.5,
+            title = "Child Population",
+            position = "bottomright") %>% 
+  # add isochrones
+  # addPolygons(data = driving_isos,
+  #             fillColor = "purple",
+  #             fillOpacity = 0.6,
+  #             stroke = FALSE) %>% 
+    addPolygons(data = cycling_isos,
+              fillColor = "dodgerblue",
+              fillOpacity = 0.5,
+              stroke = FALSE) %>%
+    addPolygons(data = walking_isos,
+              fillColor = "deeppink",
+              fillOpacity = 0.5,
+              stroke = FALSE) %>% 
+    # add playground markers
+  addCircleMarkers(data = playgrounds, lng = ~longitude, lat = ~latitude, radius = 0.5,
+                   label = ~paste(municipality),
+                   color = "darkblue", fillOpacity = 1)
+  
+
+```
+
+```{r}
+# Calculate municipalities area
+
+# Calculate area in square kilometers
+muni_area <- muni %>%
+  mutate(area_km2 = as.numeric(st_area(geometry)) / 10^6) %>% 
+  st_transform(4326) %>%
+  dplyr::select(NAME_2, area_km2, geometry)
+
+# View result
+head(muni_area)
+```
+
+```{r}
+# Calculate population density
+metricsdf <- muni_area %>%
+  left_join(population, by = c("NAME_2" = "municipality"))
+
+```
+
+```{r}
+# Union cycling and walking isochrones
+isochrones_combined <- st_union(st_geometry(cycling_isos), st_geometry(walking_isos))
+
+# transform crs
+muni_population <- st_transform(muni_population, st_crs(isochrones_combined))
+
+results <- muni_population %>%
+  mutate(
+    muni_area = st_area(geometry),  # total area of each municipality
+    isochrone_intersection = st_intersection(geometry, isochrones_combined), # intersect with combined isochrones
+    covered_area = st_area(isochrone_intersection),                          # area covered by isochrones
+    uncovered_area = muni_area - covered_area,                               # area not covered
+    uncovered_pct = as.numeric(uncovered_area / muni_area * 100),           # % not covered
+    uncovered_per_child = as.numeric(uncovered_area / child_population), # area per child not covered
+    need_index = scale(uncovered_pct) + scale(child_population) - scale(avg_income) #Use this to prioritize interventions like new playgrounds, infrastructure, or policies.
+  ) %>%
+  select(municipality, child_population, muni_area, uncovered_area, uncovered_pct, uncovered_per_child)
+
+```
+
+```{r}
+ggplot(results, aes(x = avg_income, y = uncovered_pct)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  labs(title = "Uncovered Area % vs. Average Income")
 ```
 
