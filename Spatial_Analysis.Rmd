@@ -84,7 +84,8 @@ leaflet(muni_population) %>%
   addLegend(pal = pal, values = ~child_population, opacity = 0.5,
             title = "Child Population",
             position = "bottomright") %>% 
-    # addPolygons(data = cycling_isos,   # uncomment code from line 77-80 to add cycling isochrones
+# uncomment code below to add cycling isochrones
+    # addPolygons(data = cycling_isos,   
     #           fillColor = "dodgerblue",
     #           fillOpacity = 0.3,
     #           stroke = FALSE) %>%
@@ -97,7 +98,6 @@ leaflet(muni_population) %>%
                    label = ~paste(municipality),
                    color = "darkblue", fillOpacity = 1) %>% 
     addScaleBar(position = "topright", options = scaleBarOptions(metric = TRUE, imperial = FALSE))
-  
 
 ```
 
@@ -151,11 +151,11 @@ muni_data <- muni_population2 %>%
   dplyr::select(municipality, child_population, total_area_km2)
 
 # Join covered area
-coverage_data <- left_join(muni_data, intersections, by = "municipality")
+cycling_coverage_data <- left_join(muni_data, intersections, by = "municipality")
 
 
 # Final calculations
-coverage_data <- coverage_data %>%
+cycling_coverage_data <- cycling_coverage_data %>%
   mutate(
     covered_area = pmin(covered_area, total_area_km2),
     uncovered_area = total_area_km2 - covered_area,
@@ -170,22 +170,26 @@ coverage_data <- coverage_data %>%
 
 
 # join and pivot for income and transport mode plots
-coverage_data <- left_join(coverage_data, muni_income, by = "municipality") %>% 
+cycling_coverage_data <- left_join(cycling_coverage_data, muni_income, by = "municipality") %>% 
     st_drop_geometry() %>% 
     dplyr::select(-contains("geometry"))
 
 
-coverage_pivot <- coverage_data %>%
+cycling_coverage_pivot <- cycling_coverage_data %>%
   mutate(income_quantile = ntile(income, 4)) %>%  # Divide into 4 income groups
   tidyr::pivot_longer(cols = c(covered_area, uncovered_area), 
                names_to = "coverage_type", values_to = "area")
+
+
+# save cycling data
+write.csv(cycling_coverage_data, "output/cycling_stats/cycling_coverage_data.csv", row.names = FALSE)
 
 ```
 
 ## PLOT CYCLING STATS
 ```{r}
 # 1. Uncovered area percentage
-ggplot(coverage_data, aes(x = reorder(municipality, -uncovered_pct), y = uncovered_pct, fill = municipality)) +
+p1 <- ggplot(cycling_coverage_data, aes(x = reorder(municipality, -uncovered_pct), y = uncovered_pct, fill = municipality)) +
   geom_bar(stat = "identity") +
   coord_flip() +
   labs(title = "5min Cycling Isochrone: Uncovered Area Percentage by Municipality",
@@ -193,9 +197,10 @@ ggplot(coverage_data, aes(x = reorder(municipality, -uncovered_pct), y = uncover
   theme_minimal() +
   theme(legend.position = "none")
 
+ggsave("output/cycling_stats/1_uncovered_area_pct.png", plot = p1, width = 8, height = 6)
 
 # 2. Uncovered child density:  The number of children per square kilometer living in areas of a municipality that are not covered by  isochrones 
-ggplot(coverage_data, aes(x = reorder(municipality, -uncovered_child_count), y = uncovered_child_count, fill = municipality)) +
+p2 <- ggplot(cycling_coverage_data, aes(x = reorder(municipality, -uncovered_child_count), y = uncovered_child_count, fill = municipality)) +
   geom_bar(stat = "identity") +
   coord_flip() +
   labs(title = "5min Cycling Isochrone: Uncovered Child Count by Municipality",
@@ -203,8 +208,10 @@ ggplot(coverage_data, aes(x = reorder(municipality, -uncovered_child_count), y =
   theme_minimal() +
   theme(legend.position = "none")
 
+ggsave("output/cycling_stats/2_uncovered_child_count.png.png", plot = p2, width = 8, height = 6)
+
 # 3. Child Population in pct
-ggplot(coverage_data, aes(x = reorder(municipality, -child_density), y = child_density, fill = municipality)) +
+p3 <- ggplot(cycling_coverage_data, aes(x = reorder(municipality, -child_density), y = child_density, fill = municipality)) +
   geom_bar(stat = "identity") +
   coord_flip() +
   labs(title = "Child Population Density by Municipality",
@@ -212,26 +219,34 @@ ggplot(coverage_data, aes(x = reorder(municipality, -child_density), y = child_d
   theme_minimal() +
   theme(legend.position = "none")
 
+ggsave("output/cycling_stats/3_child_density.png", plot = p3, width = 8, height = 6)
+
 # 4. Avg income by income quartile
-ggplot(coverage_pivot, aes(x = factor(income_quantile), y = area, fill = coverage_type)) +
+p4 <- ggplot(cycling_coverage_pivot, aes(x = factor(income_quantile), y = area, fill = coverage_type)) +
   geom_bar(stat = "identity", position = "fill") +
   labs(title = "Area Coverage by Income Quantile",
        x = "Income Quantile (1 = Lowest)", y = "Proportion of Total Area",
        fill = "Coverage Type") +
   theme_minimal()
 
+ggsave("output/cycling_stats/4_income_quartile_coverage.png", plot = p4, width = 8, height = 6)
+
 # 5. Covered area per municipality coloured by child density
-ggplot(coverage_data, aes(x = municipality)) +
+p5 <- ggplot(cycling_coverage_data, aes(x = municipality)) +
   geom_col(aes(y = (100- uncovered_pct), fill = child_density)) +
   labs(title = "% Covered Area per Municipality", y = "% covered Area",) +
   theme_minimal()
 
+ggsave("output/cycling_stats/5_covered_area_by_child_density.png", plot = p5, width = 8, height = 6)
+
 # 6. Uncovered child count vs income
-ggplot(coverage_data, aes(x = income, y = uncovered_child_count, colour = municipality)) +
+p6 <- ggplot(cycling_coverage_data, aes(x = income, y = uncovered_child_count, colour = municipality)) +
   geom_point(size = 3) +
   geom_smooth(method = lm, color = "red") +
   labs(title = "Uncovered Child Count vs Income",
        x = "Mean Income", y = "Children Outside Coverage Zone")
+
+ggsave("output/cycling_stats/6_uncovered_child_vs_income.png", plot = p6, width = 8, height = 6)
 
 ```
 
@@ -302,13 +317,16 @@ walking_coverage_data_2_pivot <- walking_coverage_data_2 %>%
   tidyr::pivot_longer(cols = c(covered_area, uncovered_area), 
                names_to = "coverage_type", values_to = "area")
 
+# save walking data
+write.csv(walking_coverage_data, "output/walking_stats/walking_coverage_data.csv", row.names = FALSE)
+
 ```
 
 
 ## PLOT WALKING STATS
 ```{r}
 # 1. Uncovered area percentage
-ggplot(walking_coverage_data, aes(x = reorder(municipality, -uncovered_pct), y = uncovered_pct, fill = municipality)) +
+p7 <- ggplot(walking_coverage_data, aes(x = reorder(municipality, -uncovered_pct), y = uncovered_pct, fill = municipality)) +
   geom_bar(stat = "identity") +
   coord_flip() +
   labs(title = "5min Walking Isochrone: Uncovered Area Percentage by Municipality",
@@ -316,9 +334,10 @@ ggplot(walking_coverage_data, aes(x = reorder(municipality, -uncovered_pct), y =
   theme_minimal() +
   theme(legend.position = "none")
 
+ggsave("output/walking_stats/1_uncovered_area_pct.png", plot = p7, width = 8, height = 6)
 
 # 2 . Uncovered child density:  The number of children per square kilometer living in areas of a municipality that are not covered by isochrones 
-ggplot(walking_coverage_data, aes(x = reorder(municipality, -uncovered_child_count), y = uncovered_child_count, fill = municipality)) +
+p8 <- ggplot(walking_coverage_data, aes(x = reorder(municipality, -uncovered_child_count), y = uncovered_child_count, fill = municipality)) +
   geom_bar(stat = "identity") +
   coord_flip() +
   labs(title = "5min Walking Isochrone: Uncovered Child Count by Municipality",
@@ -326,8 +345,10 @@ ggplot(walking_coverage_data, aes(x = reorder(municipality, -uncovered_child_cou
   theme_minimal() +
   theme(legend.position = "none")
 
+ggsave("output/walking_stats/2_uncovered_child_count.png.png", plot = p8, width = 8, height = 6)
+
 # 3. Child Density per municipality
-ggplot(walking_coverage_data, aes(x = reorder(municipality, -child_density), y = child_density, fill = municipality)) +
+p9 <- ggplot(walking_coverage_data, aes(x = reorder(municipality, -child_density), y = child_density, fill = municipality)) +
   geom_bar(stat = "identity") +
   coord_flip() +
   labs(title = "Child Population Density by Municipality",
@@ -335,29 +356,36 @@ ggplot(walking_coverage_data, aes(x = reorder(municipality, -child_density), y =
   theme_minimal() +
   theme(legend.position = "none")
 
+ggsave("output/walking_stats/3_child_density.png", plot = p9, width = 8, height = 6)
+
+
 # 4. Avg income by income quartile
-ggplot(walking_coverage_data_2_pivot, aes(x = factor(income_quantile), y = area, fill = coverage_type)) +
+p10 <- ggplot(walking_coverage_data_2_pivot, aes(x = factor(income_quantile), y = area, fill = coverage_type)) +
   geom_bar(stat = "identity", position = "fill") +
   labs(title = "5min Walking Isochrone: Area Coverage by Income Quantile",
        x = "Income Quantile (1 = Lowest)", y = "Proportion of Total Area",
        fill = "Coverage Type") +
   theme_minimal()
 
+ggsave("output/walking_stats/4_income_quartile_coverage.png", plot = p10, width = 8, height = 6)
+
 # 5. Covered area per municipality coloured by child density
-ggplot(walking_coverage_data, aes(x = municipality)) +
+p11 <- ggplot(walking_coverage_data, aes(x = municipality)) +
   geom_col(aes(y = covered_pct, fill = child_density)) +
   labs(title = "5min Walking Isochrone: Covered Area per Municipality", y = "% covered area",) +
   theme_minimal()
 
+ggsave("output/walking_stats/5_covered_area_by_child_density.png", plot = p11, width = 8, height = 6)
+
 # 6. Uncovered child density vs income
-  ggplot(walking_coverage_data_2, aes(x = income, y = uncovered_child_count, colour = municipality)) +
+p12 <-  ggplot(walking_coverage_data_2, aes(x = income, y = uncovered_child_count, colour = municipality)) +
   geom_point(size = 4) +
   geom_smooth(method = "lm", color = "red") + 
   ylim(0,NA) +
   labs(title = "Estimated Child Population in Uncovered Areas by Income and Municipality",
        x = "Mean Income", y = "Estimated Child Population in Uncovered Areas")
 
-
+ggsave("output/walking_stats/6_uncovered_child_vs_income.png", plot = p12, width = 8, height = 6)
 ```
 
 
@@ -396,34 +424,41 @@ coverage_stats <- left_join(walking_coverage_data, playground_counts, by = "muni
 coverage_stats <- left_join(coverage_stats, muni_income, by = "municipality")
 
 coverage_stats <- coverage_stats %>%
-      mutate(income_quantile = ntile(income, 4))
+      mutate(income_quartile = ntile(income, 4))
 
 
 # split density into quantiles
 coverage_stats <- coverage_stats %>%
-  mutate(density_quantile = ntile(child_density, 4))
+  mutate(density_quartile = ntile(child_density, 4))
+
+# save walking data
+write.csv(coverage_stats, "output/playground_stats/coverage_stats.csv", row.names = FALSE)
 ```
 
 ## PLOT PLAYGROUND STATS
 ```{r}
 # 1. Number of playgrounds in each municipality
-ggplot(playground_counts, aes(x = reorder(municipality, -n_playgrounds), y = n_playgrounds, fill = municipality)) +
+p13 <- ggplot(playground_counts, aes(x = reorder(municipality, -n_playgrounds), y = n_playgrounds, fill = municipality)) +
   geom_bar(stat = "identity") +
   labs(title = "Number of Playgrounds per Municipality",
        x = "Municipality",
        y = "Number of Playgrounds") +
   theme_minimal()
 
+ggsave("output/playground_stats/playground_count.png", plot = p13, width = 8, height = 6)
+
 # 2. Plot playgrounds per km²
-ggplot(coverage_stats, aes(x = reorder(municipality, -playgrounds_per_km2), y = playgrounds_per_km2, fill = municipality)) +
+p14 <-ggplot(coverage_stats, aes(x = reorder(municipality, -playgrounds_per_km2), y = playgrounds_per_km2, fill = municipality)) +
   geom_bar(stat = "identity") +
   labs(title = "Playgrounds per km² by Municipality",
        x = "Municipality",
        y = "Playgrounds per km²") +
   theme_minimal()
 
+ggsave("output/playground_stats/playground_per_km2.png", plot = p14, width = 8, height = 6)
+
 # 3. Plot playgrounds per 1,000 children
-ggplot(coverage_stats, aes(x = reorder(municipality, -playgrounds_per_1000_children), y = playgrounds_per_1000_children, fill = municipality)) +
+p15 <-ggplot(coverage_stats, aes(x = reorder(municipality, -playgrounds_per_1000_children), y = playgrounds_per_1000_children, fill = municipality)) +
   geom_bar(stat = "identity") +
   labs(title = "Playgrounds per 1,000 Children by Municipality",
        x = "Municipality",
@@ -431,19 +466,23 @@ ggplot(coverage_stats, aes(x = reorder(municipality, -playgrounds_per_1000_child
   theme_minimal()+
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
+ggsave("output/playground_stats/playgrounds_per_1000_children.png", plot = p15, width = 8, height = 6)
+
 # No. uncovered children by Income Quantile
-ggplot(coverage_stats, aes(x = income_quantile, y = uncovered_child_count, fill = municipality)) +
+p16 <-ggplot(coverage_stats, aes(x = income_quartile, y = uncovered_child_count, fill = municipality)) +
   geom_bar(stat = "identity") +
-  labs(title = "Estimated Proportion of Uncovered Children by Income Quantile",
-       x = "Income Quantile", y = "Estimated proportion of uncovered children")
+  labs(title = "Estimated Proportion of Uncovered Children by Income Quartile",
+       x = "Income Quartile", y = "Estimated proportion of uncovered children")
+
+ggsave("output/playground_stats/uncovered_children_income_quartile.png", plot = p16, width = 8, height = 6)
 
 # density quantiles
-ggplot(coverage_stats, aes(x = density_quantile, y = uncovered_child_count, fill = municipality)) +
+p17 <-ggplot(coverage_stats, aes(x = density_quartile, y = uncovered_child_count, fill = municipality)) +
   geom_bar(stat = "identity") +
-  labs(title = "Estimated Proportion of Uncovered Children by Child Density Quantile",
-       x = "Child Density Quantile", y = "Estimated Proportion of Uncovered Children")
+  labs(title = "Estimated Proportion of Uncovered Children by Child Density Quartile",
+       x = "Child Density Quartile", y = "Estimated Proportion of Uncovered Children")
 
-
+ggsave("output/playground_stats/uncovered_children_density_quartile.png", plot = p17, width = 8, height = 6)
 
 ```
 
@@ -451,7 +490,7 @@ ggplot(coverage_stats, aes(x = density_quantile, y = uncovered_child_count, fill
 # COMPARING CYCLING v. WALKING STATS
 ```{r}
 # select required columns and rename for clarity
-cycling_covered <- coverage_data %>%
+cycling_covered <- cycling_coverage_data %>%
   dplyr::select(municipality, covered_pct, covered_child_count, uncovered_child_count) %>%
   rename(covered_pct_cycling = covered_pct,
         covered_child_count_cycling = covered_child_count,
@@ -492,21 +531,25 @@ uncovered_long <- joined_covered %>%
   mutate(mode = recode(mode,
                        "uncovered_child_count_walking" = "Walking",
                        "uncovered_child_count_cycling" = "Cycling"))
+
+# save comparison data
+write.csv(joined_covered, "output/comparison_stats/joined_covered.csv", row.names = FALSE)
 ```
 
 ## PLOT COMPARATIVE STATS
 ```{r}
 # 1. Compare percentage increase in coverage from walking to cycling
-ggplot(joined_covered, aes(x = reorder(municipality, -pct_increase), y = pct_increase)) +
+p18 <- ggplot(joined_covered, aes(x = reorder(municipality, -pct_increase), y = pct_increase)) +
   geom_bar(stat = "identity", fill = "#FF5733") +
   labs(title = "Percentage Increase in Coverage from Walking to Cycling Isochrones",
        x = "Municipality",
        y = "Percentage Increase (%)") +
   theme_minimal()
 
+ggsave("output/comparison_stats/pct_increase_coverage.png", plot = p18, width = 8, height = 6)
 
 # 2. Compare % coverage from walking to cycling
-ggplot(long_covered, aes(x = reorder(municipality, -covered_pct), y = covered_pct, fill = mode)) +
+p19 <- ggplot(long_covered, aes(x = reorder(municipality, -covered_pct), y = covered_pct, fill = mode)) +
   geom_bar(stat = "identity", position = "identity", alpha = 0.5) +
   labs(title = "Coverage Comparison: 5-minute Walking vs 5-minute Cycling Isochrones",
        x = "Municipality",
@@ -516,9 +559,10 @@ ggplot(long_covered, aes(x = reorder(municipality, -covered_pct), y = covered_pc
   theme_minimal()+  
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
+ggsave("output/comparison_stats/coverage_comparison.png", plot = p19, width = 8, height = 6)
 
 # 3. Compare estimated no. of children covered by walking v. cycling
-ggplot(uncovered_long, aes(x = reorder(municipality, -uncovered_child_count), y = uncovered_child_count, fill = mode)) +
+p20 <- ggplot(uncovered_long, aes(x = reorder(municipality, -uncovered_child_count), y = uncovered_child_count, fill = mode)) +
   geom_bar(stat = "identity", position = "dodge", alpha = 0.6) +
   labs(title = "Uncovered Children: 5-minute Walking vs 5-minute Cycling Isochrones",
        x = "Municipality",
@@ -528,10 +572,11 @@ ggplot(uncovered_long, aes(x = reorder(municipality, -uncovered_child_count), y 
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
+ggsave("output/comparison_stats/uncovered_children_comparison.png", plot = p20, width = 8, height = 6)
 
 # 4. Proportion of Uncovered Children by Child Density and Income
-ggplot(coverage_stats, aes(x = child_density, y = uncovered_child_count)) +
-  geom_point(aes(color = as.factor(income_quantile)), size = 4, alpha = 0.7) +
+p21 <- ggplot(coverage_stats, aes(x = child_density, y = uncovered_child_count)) +
+  geom_point(aes(color = as.factor(income_quartile)), size = 4, alpha = 0.7) +
   geom_text(aes(label = municipality), vjust = -1, size = 3) +
   scale_color_brewer(palette = "Set2", name = "Income Quartile") +
   labs(
@@ -540,9 +585,11 @@ ggplot(coverage_stats, aes(x = child_density, y = uncovered_child_count)) +
     y = "Proportion of Uncovered Children"
   ) 
 
+ggsave("output/comparison_stats/proportion_uncovered_children_density_income.png", plot = p21, width = 8, height = 6)
+
 # 5. Uncovered Children by Income Quantile and Child Density
-ggplot(coverage_stats, aes(x = as.factor(income_quantile), y = uncovered_child_count)) +
-  geom_point(aes(size = child_density, color = as.factor(income_quantile)), alpha = 1) +
+p22 <- ggplot(coverage_stats, aes(x = as.factor(income_quartile), y = uncovered_child_count)) +
+  geom_point(aes(size = child_density, color = as.factor(income_quartile)), alpha = 1) +
   geom_text(aes(label = municipality), vjust = -1.1, size = 3) +
   scale_size_continuous(name = "Child Density") +
   scale_color_brewer(palette = "Set2", name = "Income Quartile") +
@@ -550,9 +597,10 @@ ggplot(coverage_stats, aes(x = as.factor(income_quantile), y = uncovered_child_c
     title = "Uncovered Children by Income Quantile and Child Density",
     x = "Income Quartile",
     y = "Uncovered Children"
-  ) 
+  ) +
+  theme_minimal()
 
-
+ggsave("output/comparison_stats/uncovered_children_density_income.png", plot = p22, width = 8, height = 6)
 ```
 
 
