@@ -3,6 +3,14 @@ title: "Preprocessing Playgrounds Data"
 output: html_document
 ---
 
+Outline of preprocessing:
+
+1. Load libraries and data (Line 17-20)
+2. Load playgrounds data and preprocess (Line 23-55)
+3. Load income and population data and clean (Line 58-98)
+4. Save data frames (Line 101-105)
+5. Explorative plotting - validation (Line 110-150)
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(sf)
@@ -14,6 +22,7 @@ library(tidyr)
 library(leaflet)
 ```
 
+# Load playgrounds data and preprocess
 ```{r}
 # Load data
 aar <- st_read("data/Aarhus_legepladser.geojson")
@@ -48,6 +57,7 @@ playgrounds$latitude <- st_coordinates(playgrounds)[,2]
 
 ```
 
+# Load income and population data and clean
 ```{r}
 # Load CSVs
 income <- read.csv("data/income.csv")
@@ -89,13 +99,14 @@ muni_population <- muni %>%
 
 ```
 
+# Save data frames
 ```{r}
 saveRDS(playgrounds, "data/playgrounds_clean.rds")
 saveRDS(muni_income, "data/muni_income.rds")
 saveRDS(muni_population, "data/muni_population.rds")
 ```
 
-Initial Plotting
+# Explorative plotting - Validation
 ```{r}
 # plot municipality by income
 pal <- colorBin(palette = "OrRd", domain = muni_income$income, bins = 8)
@@ -118,7 +129,6 @@ leaflet(muni_income) %>%
 ```
 
 ```{r}
-
 # Plot municipality population
 pal <- colorBin(palette = "OrRd", domain = muni_population$child_population, bins = 8)
 
