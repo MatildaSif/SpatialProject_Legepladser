@@ -1,245 +1,51 @@
 ---
-title: "Playgrounds"
+title: "Playgrounds Spatial Analysis"
 output: html_document
-date: "2025-04-22"
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+```{r setup}
 library(sf)
 library(dplyr)
 library(leaflet)
-library(geodata)
-library(terra)
-library(raster)
-```
-
-
-```{r cars}
-# Load Playground data
-aar <- st_read("data/Aarhus_legepladser.geojson")
-frb <- st_read("data/Frederiksberg_legepladser.geojson")
-kbh<- st_read("data/København_legepladser.geojson")
-rks <- st_read("data/RingkobingSkjern_legepladser.geojson")
-sb <- st_read("data/Silkeborg_legepladser.geojson") # sb is a more than just playgrounds - need to filter
-vhl <- st_read("data/Vesthimmerland_legepladser.geojson")
-
-
-head(aar)
-head(frb)
-head(kbh)
-head(rks)
-head(sb) # filter for facilitet_type
-head(vhl)
-
-# check all different values in facilitet_type column for Silkeborg data
-unique(sb$FACILITET_TYPE)
-# filter so only "Legeplads" are remaining
-sb <- sb %>%  filter(FACILITET_TYPE == "Legeplads")
-unique(sb$FACILITET_TYPE)
+library(ggplot2)
+library(mapboxapi)
+library(tidyr)
 ```
 
 ```{r}
-# check crs
-st_crs(aar)
-st_crs(frb)
-st_crs(kbh)
-st_crs(rks)
-st_crs(sb)
-st_crs(vhl)
+playgrounds <- readRDS("data/playgrounds_clean.rds")
+muni_income <- readRDS("data/muni_income.rds")
+muni_population <- readRDS("data/muni_population.rds")
 
-# use st_transform
-aar <- st_transform(aar, 4326)
-frb <- st_transform(frb, 4326)
-kbh <- st_transform(kbh, 4326)
-rks <- st_transform(rks, 4326)
-sb <- st_transform(sb, 4326)
-vhl <- st_transform(vhl, 4326)
 ```
 
+```{r package-info, results='asis'}
+# Define your packages
+packages <- c("mapboxapi")
 
-```{r}
-# Collate playgrounds into one map
-
-## Select vital columns
-aar <- aar %>% dplyr::select(geometry, adresse)
-frb <- frb %>% dplyr::select(geometry, navn)
-kbh <- kbh %>% dplyr::select(geometry, adressebeskrivelse)
-rks <- rks %>% dplyr::select(geometry, LEVERANDOR)
-sb <- sb %>% dplyr::select(geometry, VEJNAVN)
-vhl <- vhl %>% dplyr::select(geometry, Adresse)
-
-## add column name with municipality
-aar <- aar %>% mutate(municipality = "Aarhus")
-frb <- frb %>% mutate(municipality = "Frederiksberg")
-kbh <- kbh %>% mutate(municipality = "København")
-rks <- rks %>% mutate(municipality = "Ringkøbing-Skjern")
-sb <- sb %>% mutate(municipality = "Silkeborg")
-vhl <- vhl %>% mutate(municipality = "Vesthimmerland")
-
-## Rename columns to be the same
-aar <- aar %>% rename(adresse = adresse)
-frb <- frb %>% rename(adresse = navn)
-kbh <- kbh %>% rename(adresse = adressebeskrivelse)
-rks <- rks %>% rename(adresse = LEVERANDOR)
-sb <- sb %>% rename(adresse = VEJNAVN)
-vhl <- vhl %>% rename(adresse = Adresse)
-
-# get centroids of multipolygons and multipoints
-aar <- aar %>%
-  mutate(geometry = st_centroid(geometry)) %>%
-  st_set_geometry("geometry")
-
-sb <- st_make_valid(sb)
-sb <- sb %>%
-  mutate(geometry = st_centroid(geometry)) %>%
-  st_set_geometry("geometry")
-
-frb <- frb %>%
-  mutate(geometry = st_centroid(geometry)) %>%
-  st_set_geometry("geometry")
-
-kbh <- kbh %>%
-  mutate(geometry = st_centroid(geometry)) %>%
-  st_set_geometry("geometry")
-
-## Combine all dataframes into one
-playgrounds <- rbind(aar, frb, kbh, rks, sb, vhl)
-
-playgrounds <- st_cast(playgrounds, "POINT")
-                    
-table(st_geometry_type(playgrounds))
-```
-
-```{r}
-# create longitude and latitude columns based on point geometry
-playgrounds <- playgrounds %>% 
-  mutate(longitude = st_coordinates(geometry)[,1],
-         latitude = st_coordinates(geometry)[,2])
+# Iterate over each package
+for (pkg in packages) {
+  # Load the package
+  library(pkg, character.only = TRUE)
   
-# create a leaflet map with markers using longitude and latitude, add markers with muncipality.
-leaflet(playgrounds) %>%
-  addTiles() %>%
-  setView(lng = 10.2, lat = 56.2, zoom = 7) %>% 
-  addCircleMarkers(lng = ~longitude, lat = ~latitude, radius = 0.5,
-             label = ~paste(municipality))
-```
-
-```{r}
-# Load Municipality income data
-income <- read.csv("data/income.csv")
-income$municipality <- gsub("-", " ", income$municipality)
-
-# Load population data of children from 0-14 years old
-population <- read.csv("data/Child014_Population.csv")
-population$municipality <- gsub("-", " ", population$municipality)
-
-population$municipality <- gsub("æ", "ae", population$municipality)
-population$municipality <- gsub("Æ", "Ae", population$municipality)
-population$municipality <- gsub("ø", "oe", population$municipality)
-population$municipality <- gsub("å", "aa", population$municipality)
-population$municipality <- gsub("Å", "Aa", population$municipality)
-population$municipality <- gsub("-", " ", population$municipality)
-```
-
-
-```{r}
-# Load Municipality boundries data
-gadm(country = "DNK", path = "data", level = 2, version="latest")
-muni <- readRDS("data/gadm/gadm41_DNK_2_pk.rds")
-class(muni)
-
-# convert vector to sf
-muni <- st_as_sf(muni)
-# transform crs
-muni <- st_transform(muni, crs = 4326)
-
-# check column names
-names(muni)
-head(muni) # The column with municipality names is NAME_2
-
-# recode the danish letters to match with csv files
-muni$NAME_2 <- gsub("æ", "ae", muni$NAME_2)
-muni$NAME_2 <- gsub("Æ", "Ae", muni$NAME_2)
-muni$NAME_2 <- gsub("ø", "oe", muni$NAME_2)
-muni$NAME_2 <- gsub("å", "aa", muni$NAME_2)
-muni$NAME_2 <- gsub("Å", "Aa", muni$NAME_2)
-muni$NAME_2 <- gsub("-", " ", muni$NAME_2)
-
-# plot
-leaflet() %>%
-  addTiles() %>%
-  addPolygons(data = muni, color = "blue", weight = 1, fillOpacity = 0.01)
+  # Get version
+  version <- as.character(packageVersion(pkg))
+  
+  # Get citation
+  cit <- citation(pkg)
+  
+  # Print in Markdown format
+  cat(sprintf("### %s (v%s)\n\n", pkg, version))
+  cat(paste(capture.output(print(cit, style = "text")), collapse = "\n"))
+  cat("\n\n---\n\n")
+}
 
 ```
-Join municipality boundaries to income data
-```{r}
-# Join income data with sf municipalities object
-muni_income <- muni %>%
-  left_join(income, by = c("NAME_2" = "municipality")) 
-
-muni_income <- muni_income %>%
-  rename("municipality" = "NAME_2") %>% 
-  dplyr::select(municipality, geometry, income)
-
-# plot
-pal <- colorBin(palette = "OrRd", domain = muni_income$income, bins = 8)
-
-leaflet(muni_income) %>%
-  addProviderTiles("CartoDB.Positron") %>%
-  # add income
-  addPolygons(fillColor = ~pal(income),
-              color = "#444444",
-              weight = 1,
-              fillOpacity = 0.5,
-              popup = ~paste(municipality, "<br>Income:", income)) %>%
-  addLegend(pal = pal, values = ~income, opacity = 0.7,
-            title = "Income",
-            position = "bottomright") %>% 
-  # add playgrounds
-  addCircleMarkers(data = playgrounds, lng = ~longitude, lat = ~latitude, radius = 0.5,
-                   label = ~paste(municipality),
-                   color = "darkblue", fillOpacity = 0.5)
-
-```
-
-Join municipality boundaries to population data
-```{r}
-# Join population data with sf municipalities object
-muni_population <- muni %>%
-  left_join(population, by = c("NAME_2" = "municipality")) 
-
-muni_population <- muni_population %>%
-    rename("municipality" = "NAME_2") %>% 
-    dplyr::select(municipality, geometry, child_population) %>% 
-    mutate(population = as.numeric(gsub(" ", "", child_population)))
-
-# plot
-pal <- colorBin(palette = "OrRd", domain = muni_population$child_population, bins = 8)
-
-leaflet(muni_population) %>%
-  addProviderTiles("CartoDB.Positron") %>%
-  # add population
-  addPolygons(fillColor = ~pal(child_population),
-              color = "#444444",
-              weight = 1,
-              fillOpacity = 0.5,
-              popup = ~paste(municipality, "<br>Child Population:", child_population)) %>%
-  addLegend(pal = pal, values = ~child_population, opacity = 0.7,
-            title = "Child Population",
-            position = "bottomright") %>% 
-  # add playgrounds
-  addCircleMarkers(data = playgrounds, lng = ~longitude, lat = ~latitude, radius = 0.5,
-                   label = ~paste(municipality),
-                   color = "darkblue", fillOpacity = 0.5)
-```
-
 MapBox Setup
 
 ```{r}
 my_token <- "pk.eyJ1IjoibWF0aWxkYXNpZiIsImEiOiJjbTl2MzF0NWowZGdvMmpyMmxjbDRmZTA3In0.cELeKMY07SV3Z37zMLBIOQ"
 
-library(mapboxapi)
 mb_access_token(my_token, install = TRUE, overwrite = TRUE)
 ```
 
@@ -259,7 +65,7 @@ walking_isos <- mb_isochrone(
 cycling_isos <- mb_isochrone(
   playgrounds,
   profile = "cycling",
-  time = 10,
+  time = 5,
   id = "adresse"
   )
 
@@ -282,7 +88,7 @@ leaflet(muni_population) %>%
   addPolygons(fillColor = ~pal(child_population),
               color = "#444444",
               weight = 1,
-              fillOpacity = 0.5,
+              fillOpacity = 0.3,
               popup = ~paste(municipality, "<br>Child Population:", child_population)) %>%
   addLegend(pal = pal, values = ~child_population, opacity = 0.5,
             title = "Child Population",
@@ -292,67 +98,533 @@ leaflet(muni_population) %>%
   #             fillColor = "purple",
   #             fillOpacity = 0.6,
   #             stroke = FALSE) %>% 
-    addPolygons(data = cycling_isos,
-              fillColor = "dodgerblue",
-              fillOpacity = 0.5,
-              stroke = FALSE) %>%
+    # addPolygons(data = cycling_isos,
+    #           fillColor = "dodgerblue",
+    #           fillOpacity = 0.3,
+    #           stroke = FALSE) %>%
     addPolygons(data = walking_isos,
               fillColor = "deeppink",
-              fillOpacity = 0.5,
+              fillOpacity = 0.4,
               stroke = FALSE) %>% 
     # add playground markers
-  addCircleMarkers(data = playgrounds, lng = ~longitude, lat = ~latitude, radius = 0.5,
+  addCircleMarkers(data = playgrounds, lng = ~longitude, lat = ~latitude, radius = 0.1,
                    label = ~paste(municipality),
-                   color = "darkblue", fillOpacity = 1)
+                   color = "darkblue", fillOpacity = 1) %>% 
+    addScaleBar(position = "topright", options = scaleBarOptions(metric = TRUE, imperial = FALSE))
   
 
 ```
 
+CALCULATE STATS for Cycling Iso
+
+
 ```{r}
-# Calculate municipalities area
+# select only needed municipalities
+muni_population2 <- muni_population %>% 
+  filter(municipality %in% c("Aarhus", "Frederiksberg", "Koebenhavn", "Ringkoebing Skjern", "Silkeborg", "Vesthimmerland"))
 
-# Calculate area in square kilometers
-muni_area <- muni %>%
-  mutate(area_km2 = as.numeric(st_area(geometry)) / 10^6) %>% 
-  st_transform(4326) %>%
-  dplyr::select(NAME_2, area_km2, geometry)
+cycling_geo <- st_geometry(cycling_isos)
 
-# View result
-head(muni_area)
+st_crs(muni_population2)
+st_crs(cycling_geo)
+
+# st_transform cycling geo to match munipopulation
+cycling_geo <- st_transform(cycling_geo, 4326)
+
+st_crs(cycling_geo)
+
+# geometry cycling isochrones
+cycling_union <- st_union(cycling_geo)
+
 ```
 
 ```{r}
-# Calculate population density
-metricsdf <- muni_area %>%
-  left_join(population, by = c("NAME_2" = "municipality"))
+class(muni_population2)
+class(cycling_union)
 
 ```
 
+
+
 ```{r}
-# Union cycling and walking isochrones
-isochrones_combined <- st_union(st_geometry(cycling_isos), st_geometry(walking_isos))
 
-# transform crs
-muni_population <- st_transform(muni_population, st_crs(isochrones_combined))
+# Intersect with municipalities
+intersections <- st_intersection(muni_population2, cycling_union)
 
-results <- muni_population %>%
+# Compute covered area in km² (convert explicitly)
+intersections <- intersections %>%
+  mutate(covered_area_km2 = as.numeric(st_area(geometry)) / 10^6) %>%
+  st_drop_geometry() %>%
+  group_by(municipality) %>%
+  summarise(covered_area = sum(covered_area_km2), .groups = "drop")
+
+# Calculate municipality area (in km²)
+muni_population2 <- muni_population2 %>%
+  mutate(total_area_km2 = as.numeric(st_area(geometry)) / 10^6)
+
+# Prepare attribute-only data
+muni_data <- muni_population2 %>%
+  st_drop_geometry() %>%
+  dplyr::select(municipality, child_population, total_area_km2)
+
+# Join covered area
+coverage_data <- left_join(muni_data, intersections, by = "municipality")
+
+
+# Final calculations
+coverage_data <- coverage_data %>%
   mutate(
-    muni_area = st_area(geometry),  # total area of each municipality
-    isochrone_intersection = st_intersection(geometry, isochrones_combined), # intersect with combined isochrones
-    covered_area = st_area(isochrone_intersection),                          # area covered by isochrones
-    uncovered_area = muni_area - covered_area,                               # area not covered
-    uncovered_pct = as.numeric(uncovered_area / muni_area * 100),           # % not covered
-    uncovered_per_child = as.numeric(uncovered_area / child_population), # area per child not covered
-    need_index = scale(uncovered_pct) + scale(child_population) - scale(avg_income) #Use this to prioritize interventions like new playgrounds, infrastructure, or policies.
-  ) %>%
-  select(municipality, child_population, muni_area, uncovered_area, uncovered_pct, uncovered_per_child)
+    covered_area = pmin(covered_area, total_area_km2),
+    uncovered_area = total_area_km2 - covered_area,
+    child_density = child_population / total_area_km2,
+    uncovered_child_count = child_density * uncovered_area,
+#estimated number of children in the uncovered area (assuming uniform distribution)
+    uncovered_pct = pmax(uncovered_area / total_area_km2) * 100,
+    covered_pct = pmax(covered_area / total_area_km2) * 100,
+    covered_child_count = child_density * covered_area,
+    prop_children_covered = covered_child_count / child_population
+  )
+
+coverage_data <- left_join(coverage_data, muni_income, by = "municipality") %>% 
+    st_drop_geometry() %>% 
+    dplyr::select(-contains("geometry"))
+
+
+coverage_pivot <- coverage_data %>%
+  mutate(income_quantile = ntile(income, 4)) %>%  # Divide into 4 income groups
+  tidyr::pivot_longer(cols = c(covered_area, uncovered_area), 
+               names_to = "coverage_type", values_to = "area")
+
+
+
+```
+
+
+
+PLOT
+```{r}
+# 1. Uncovered area percentage
+ggplot(coverage_data, aes(x = reorder(municipality, -uncovered_pct), y = uncovered_pct, fill = municipality)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs(title = "5min Cycling Isochrone: Uncovered Area Percentage by Municipality",
+       x = "Municipality", y = "Uncovered Area (%)") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+
+# 3. Uncovered child density:  The number of children per square kilometer living in areas of a municipality that are not covered by  isochrones 
+ggplot(coverage_data, aes(x = reorder(municipality, -uncovered_child_count), y = uncovered_child_count, fill = municipality)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs(title = "5min Cycling Isochrone: Uncovered Child Count by Municipality",
+       x = "Municipality", y = "Uncovered Child Count ") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+# 4. Child Population
+ggplot(coverage_data, aes(x = reorder(municipality, -child_population), y = child_population, fill = municipality)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs(title = "Child Population by Municipality",
+       x = "Municipality", y = "Child Population") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+# 5. Child Population in pct
+ggplot(coverage_data, aes(x = reorder(municipality, -child_density), y = child_density, fill = municipality)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs(title = "Child Population Density by Municipality",
+       x = "Municipality", y = "Child Density") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+
+# 6. Proportion of Child Population Covered
+ggplot(coverage_data, aes(x = reorder(municipality, -prop_children_covered), 
+                          y = prop_children_covered)) +
+  geom_col(fill = "skyblue") +
+  labs(title = "Proportion of Child Population Covered by Cycling Isochrones",
+       x = "Municipality", y = "Proportion Covered") +
+  theme_minimal() +
+  coord_flip()
+
+
+# 7. Uncovered child count v. income
+ggplot(coverage_data, aes(x = income, y = prop_children_covered, colour = municipality)) +
+  geom_point( size = 3) +
+  geom_smooth(method = "lm", se = FALSE, color = "darkred") +
+  labs(title = "Proportion of covered children vs Mean Income",
+       x = "Mean Income", y = "Proportion of covered children") +
+  theme_minimal()
+
+
+# 8. Avg income by income quartile
+ggplot(coverage_pivot, aes(x = factor(income_quantile), y = area, fill = coverage_type)) +
+  geom_bar(stat = "identity", position = "fill") +
+  labs(title = "Area Coverage by Income Quantile",
+       x = "Income Quantile (1 = Lowest)", y = "Proportion of Total Area",
+       fill = "Coverage Type") +
+  theme_minimal()
+
+# 9. Covered area per municipality coloured by child density
+ggplot(coverage_data, aes(x = municipality)) +
+  geom_col(aes(y = (100- uncovered_pct), fill = child_density)) +
+  labs(title = "% Covered Area per Municipality", y = "% covered Area",) +
+  theme_minimal()
+
+# 10. Uncovered child count vs income
+ggplot(coverage_data, aes(x = income, y = uncovered_child_count, colour = municipality)) +
+  geom_point(size = 3) +
+  geom_smooth(method = lm, color = "red") +
+  labs(title = "Uncovered Child Count vs Income",
+       x = "Mean Income", y = "Children Outside Coverage Zone")
+
+```
+
+
+
+STATS for WALKING ISOS
+
+```{r}
+# select only needed municipalities
+muni_population2 <- muni_population %>% 
+  filter(municipality %in% c("Aarhus", "Frederiksberg", "Koebenhavn", "Ringkoebing Skjern", "Silkeborg", "Vesthimmerland"))
+
+walking_geo <- st_geometry(walking_isos)
+
+st_crs(muni_population2)
+st_crs(walking_geo)
+
+# st_transform walking geo to match munipopulation
+walking_geo <- st_transform(walking_geo, 4326)
+
+st_crs(walking_geo)
+
+# geometry walking isochrones
+walking_union <- st_union(walking_geo)
+
+class(muni_population2)
+class(walking_union)
+```
+
+
+
+```{r}
+
+# Intersect with municipalities
+walking_intersections <- st_intersection(muni_population2, walking_union)
+
+# Compute covered area in km² (convert explicitly)
+walking_intersections <- walking_intersections %>%
+  mutate(covered_area_km2 = as.numeric(st_area(geometry)) / 10^6) %>%
+  st_drop_geometry() %>%
+  group_by(municipality) %>%
+  summarise(covered_area = sum(covered_area_km2), .groups = "drop")
+
+# Join covered area
+walking_coverage_data <- left_join(muni_data, walking_intersections, by = "municipality")
+
+
+# Final calculations
+walking_coverage_data <- walking_coverage_data %>%
+  mutate(
+    covered_area = pmin(covered_area, total_area_km2),
+    uncovered_area = total_area_km2 - covered_area,
+    child_density = child_population / total_area_km2,
+    uncovered_child_count = child_density * uncovered_area, # estimated number of children in the uncovered area (assuming uniform distribution)
+    uncovered_pct = pmax(uncovered_area / total_area_km2) * 100,
+    covered_pct = pmax(covered_area / total_area_km2) * 100,
+    covered_child_count = child_density * covered_area,
+    prop_children_covered = covered_child_count / child_population
+  )
+
+walking_coverage_data_2 <- left_join(walking_coverage_data, muni_income, by = "municipality") %>% 
+    st_drop_geometry() %>% 
+    dplyr::select(-contains("geometry"))
+
+
+walking_coverage_data_2_pivot <- walking_coverage_data_2 %>%
+  mutate(income_quantile = ntile(income, 4)) %>%  # Divide into 4 income groups
+  tidyr::pivot_longer(cols = c(covered_area, uncovered_area), 
+               names_to = "coverage_type", values_to = "area")
+
+```
+
+
+PLOT
+```{r}
+# 1. Uncovered area percentage
+ggplot(walking_coverage_data, aes(x = reorder(municipality, -uncovered_pct), y = uncovered_pct, fill = municipality)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs(title = "5min Walking Isochrone: Uncovered Area Percentage by Municipality",
+       x = "Municipality", y = "Uncovered Area (%)") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+
+# 2!! . Uncovered child density:  The number of children per square kilometer living in areas of a municipality that are not covered by  isochrones 
+ggplot(walking_coverage_data, aes(x = reorder(municipality, -uncovered_child_count), y = uncovered_child_count, fill = municipality)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs(title = "5min Walking Isochrone: Uncovered Child Count by Municipality",
+       x = "Municipality", y = "Uncovered Child Count ") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+# 3. Child Population
+# ggplot(walking_coverage_data, aes(x = reorder(municipality, -child_population), y = child_population, fill = municipality)) +
+#   geom_bar(stat = "identity") +
+#   coord_flip() +
+#   labs(title = "Child Population by Municipality",
+#        x = "Municipality", y = "Child Population") +
+#   theme_minimal() +
+#   theme(legend.position = "none")
+
+# 4. Child Density per municipality
+ggplot(walking_coverage_data, aes(x = reorder(municipality, -child_density), y = child_density, fill = municipality)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs(title = "Child Population Density by Municipality",
+       x = "Municipality", y = "Child Density") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+
+# 5. Proportion of Child Population Covered
+# ggplot(walking_coverage_data, aes(x = reorder(municipality, -prop_children_covered), 
+#                           y = prop_children_covered)) +
+#   geom_col(fill = "skyblue") +
+#   labs(title = "Proportion of Child Population Covered by 5min Walking Isochrones",
+#        x = "Municipality", y = "Proportion Covered") +
+#   theme_minimal() +
+#   coord_flip()
+
+
+# 7. Uncovered child count v. income
+# ggplot(walking_coverage_data_2, aes(x = income, y = prop_children_covered, colour = municipality)) +
+#   geom_point( size = 3) +
+#   geom_smooth(method = "lm", se = FALSE, color = "darkred") +
+#   labs(title = "5min Walking Isochrone: Proportion of covered children vs Mean Income",
+#        x = "Mean Income", y = "Proportion of covered children") +
+#   theme_minimal()
+
+
+# 8. Avg income by income quartile
+ggplot(walking_coverage_data_2_pivot, aes(x = factor(income_quantile), y = area, fill = coverage_type)) +
+  geom_bar(stat = "identity", position = "fill") +
+  labs(title = "5min Walking Isochrone: Area Coverage by Income Quantile",
+       x = "Income Quantile (1 = Lowest)", y = "Proportion of Total Area",
+       fill = "Coverage Type") +
+  theme_minimal()
+
+# 9. Covered area per municipality coloured by child density
+ggplot(walking_coverage_data, aes(x = municipality)) +
+  geom_col(aes(y = covered_pct, fill = child_density)) +
+  labs(title = "5min Walking Isochrone: Covered Area per Municipality", y = "% covered area",) +
+  theme_minimal()
+
+# 11. Uncovered child density vs income
+  ggplot(walking_coverage_data_2, aes(x = income, y = uncovered_child_count, colour = municipality)) +
+  geom_point(size = 4) +
+  geom_smooth(method = "lm", color = "red") + 
+  ylim(0,NA) +
+  labs(title = "Estimated Child Population in Uncovered Areas by Income and Municipality",
+       x = "Mean Income", y = "Estimated Child Population in Uncovered Areas")
+
 
 ```
 
 ```{r}
-ggplot(results, aes(x = avg_income, y = uncovered_pct)) +
-  geom_point() +
-  geom_smooth(method = "lm") +
-  labs(title = "Uncovered Area % vs. Average Income")
+# recode playground municipality names
+playgrounds$municipality <- gsub("æ", "ae", playgrounds$municipality)
+playgrounds$municipality <- gsub("Æ", "Ae", playgrounds$municipality)
+playgrounds$municipality <- gsub("ø", "oe", playgrounds$municipality)
+playgrounds$municipality <- gsub("å", "aa", playgrounds$municipality)
+playgrounds$municipality <- gsub("Å", "Aa", playgrounds$municipality)
+playgrounds$municipality <- gsub("-", " ", playgrounds$municipality)
+
+# Spatial join to assign each playground to a municipality
+playgrounds_in_munis <- st_join(playgrounds, muni_population2)
+
+# Count playgrounds by municipality
+playground_counts <- playgrounds_in_munis %>%
+  st_drop_geometry() %>%
+  count(municipality.x, name = "n_playgrounds") %>% 
+  rename(municipality = municipality.x)
+
+
+# Join with playground counts
+coverage_stats <- left_join(walking_coverage_data, playground_counts, by = "municipality") %>%
+  mutate(
+    n_playgrounds = ifelse(is.na(n_playgrounds), 0, n_playgrounds),  # handle municipalities with 0 playgrounds
+    playgrounds_per_km2 = n_playgrounds / total_area_km2,
+    playgrounds_per_1000_children = n_playgrounds / (child_population / 1000)
+  )
+
+# join with income data
+coverage_stats <- left_join(coverage_stats, muni_income, by = "municipality")
+
+coverage_stats <- coverage_stats %>%
+      mutate(income_quantile = ntile(income, 4))
+
+
+# split density into quantiles
+coverage_stats <- coverage_stats %>%
+  mutate(density_quantile = ntile(child_density, 4))
+```
+
+```{r}
+# PLOT
+
+# 1. Number of playgrounds in each municipality
+ggplot(playground_counts, aes(x = reorder(municipality, -n_playgrounds), y = n_playgrounds, fill = municipality)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Number of Playgrounds per Municipality",
+       x = "Municipality",
+       y = "Number of Playgrounds") +
+  theme_minimal()
+
+# 2. Plot playgrounds per km²
+ggplot(coverage_stats, aes(x = reorder(municipality, -playgrounds_per_km2), y = playgrounds_per_km2, fill = municipality)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Playgrounds per km² by Municipality",
+       x = "Municipality",
+       y = "Playgrounds per km²") +
+  theme_minimal()
+
+# 3. Plot playgrounds per 1,000 children
+ggplot(coverage_stats, aes(x = reorder(municipality, -playgrounds_per_1000_children), y = playgrounds_per_1000_children, fill = municipality)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Playgrounds per 1,000 Children by Municipality",
+       x = "Municipality",
+       y = "Playgrounds per 1,000 Children") +
+  theme_minimal()+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# No. uncovered children by Income Quantile
+ggplot(coverage_stats, aes(x = income_quantile, y = uncovered_child_count, fill = municipality)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Estimated Proportion of Uncovered Children by Income Quantile",
+       x = "Income Quantile", y = "Estimated proportion of uncovered children")
+
+# density quantiles
+ggplot(coverage_stats, aes(x = density_quantile, y = uncovered_child_count, fill = municipality)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Estimated Proportion of Uncovered Children by Child Density Quantile",
+       x = "Child Density Quantile", y = "Estimated Proportion of Uncovered Children")
+
+
+
+```
+Percentage cover increase from walking to cycling isochrone
+```{r}
+# select covered_pct
+cycling_covered <- coverage_data %>%
+  dplyr::select(municipality, covered_pct, covered_child_count, uncovered_child_count) %>%
+  rename(covered_pct_cycling = covered_pct,
+        covered_child_count_cycling = covered_child_count,
+        uncovered_child_count_cycling = uncovered_child_count)
+
+walking_covered <- walking_coverage_data %>%
+  dplyr::select(municipality, covered_pct, covered_child_count, uncovered_child_count) %>%
+  rename(covered_pct_walking = covered_pct,
+        covered_child_count_walking = covered_child_count,
+        uncovered_child_count_walking = uncovered_child_count)
+
+joined_covered <- left_join(cycling_covered, walking_covered, by = "municipality")
+
+
+joined_covered <- joined_covered %>%
+  mutate(
+    pct_increase = ((covered_pct_cycling - covered_pct_walking) / covered_pct_walking) * 100
+  )
+
+long_covered <- joined_covered %>%
+    dplyr::select(municipality, covered_pct_walking, covered_pct_cycling) %>%
+    pivot_longer(cols = starts_with("covered_pct"),
+                 names_to = "mode",
+                 values_to = "covered_pct") %>%
+    mutate(mode = recode(mode,
+                         "covered_pct_walking" = "Walking",
+                         "covered_pct_cycling" = "Cycling"))
+
+uncovered_long <- joined_covered %>%
+  select(municipality, uncovered_child_count_walking, uncovered_child_count_cycling) %>%
+  pivot_longer(
+    cols = starts_with("uncovered_child_count"),
+    names_to = "mode",
+    values_to = "uncovered_child_count"
+  ) %>%
+  mutate(mode = recode(mode,
+                       "uncovered_child_count_walking" = "Walking",
+                       "uncovered_child_count_cycling" = "Cycling"))
+
+
+# Plot
+ggplot(joined_covered, aes(x = reorder(municipality, -pct_increase), y = pct_increase)) +
+  geom_bar(stat = "identity", fill = "#FF5733") +
+  labs(title = "Percentage Increase in Coverage from Walking to Cycling Isochrones",
+       x = "Municipality",
+       y = "Percentage Increase (%)") +
+  theme_minimal()
+
+# plotpercentage increase along with walking_covered_pct and for cycling
+# Plot with legend
+ggplot(long_covered, aes(x = reorder(municipality, -covered_pct), y = covered_pct, fill = mode)) +
+  geom_bar(stat = "identity", position = "identity", alpha = 0.5) +
+  labs(title = "Coverage Comparison: 5-minute Walking vs 5-minute Cycling Isochrones",
+       x = "Municipality",
+       y = "Coverage (%)",
+       fill = "Mode") +
+  scale_fill_manual(values = c("Walking" = "#3A86FF", "Cycling" = "#4C9F70")) +
+  theme_minimal()+  
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+# plt number of children walking v. cycling
+ggplot(uncovered_long, aes(x = reorder(municipality, -uncovered_child_count), y = uncovered_child_count, fill = mode)) +
+  geom_bar(stat = "identity", position = "dodge", alpha = 0.6) +
+  labs(title = "Uncovered Children: 5-minute Walking vs 5-minute Cycling Isochrones",
+       x = "Municipality",
+       y = "Number of Uncovered Children",
+       fill = "Mode") +
+  scale_fill_manual(values = c("Walking" = "#3A86FF", "Cycling" = "#4C9F70")) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+# Assuming you have a dataframe `joined_covered` with these variables:
+# municipality, child_density, uncovered_prop, income_quartile
+
+ggplot(coverage_stats, aes(x = child_density, y = uncovered_child_count)) +
+  geom_point(aes(color = as.factor(income_quantile)), size = 4, alpha = 0.7) +
+  geom_text(aes(label = municipality), vjust = -1, size = 3) +
+  scale_color_brewer(palette = "Set2", name = "Income Quartile") +
+  labs(
+    title = "Proportion of Uncovered Children by Child Density and Income",
+    x = "Child Density (children per km²)",
+    y = "Proportion of Uncovered Children"
+  ) 
+
+
+ggplot(coverage_stats, aes(x = as.factor(income_quantile), y = uncovered_child_count)) +
+  geom_point(aes(size = child_density, color = as.factor(income_quantile)), alpha = 1) +
+  geom_text(aes(label = municipality), vjust = -1.1, size = 3) +
+  scale_size_continuous(name = "Child Density") +
+  scale_color_brewer(palette = "Set2", name = "Income Quartile") +
+  labs(
+    title = "Uncovered Children by Income Quantile and Child Density",
+    x = "Income Quartile",
+    y = "Uncovered Children"
+  ) 
+
+
+```
+
+```{r}
+sum(joined_covered$pct_increase)/6
 ```
 

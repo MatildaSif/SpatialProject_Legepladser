@@ -1,0 +1,141 @@
+---
+title: "Preprocessing Playgrounds Data"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(sf)
+library(dplyr)
+library(geodata)
+library(terra)
+library(units)
+library(tidyr)
+library(leaflet)
+```
+
+```{r}
+# Load data
+aar <- st_read("data/Aarhus_legepladser.geojson")
+frb <- st_read("data/Frederiksberg_legepladser.geojson")
+kbh <- st_read("data/København_legepladser.geojson")
+rks <- st_read("data/RingkobingSkjern_legepladser.geojson")
+sb <- st_read("data/Silkeborg_legepladser.geojson") %>% filter(FACILITET_TYPE == "Legeplads")
+vhl <- st_read("data/Vesthimmerland_legepladser.geojson")
+
+# Harmonize and transform
+datasets <- list(
+  aar = aar %>% dplyr::select(geometry, adresse) %>% mutate(municipality = "Aarhus") %>% rename(adresse = adresse),
+  frb = frb %>% dplyr::select(geometry, navn) %>% mutate(municipality = "Frederiksberg") %>% rename(adresse = navn),
+  kbh = kbh %>% dplyr::select(geometry, adressebeskrivelse) %>% mutate(municipality = "København") %>% rename(adresse = adressebeskrivelse),
+  rks = rks %>% dplyr::select(geometry, LEVERANDOR) %>% mutate(municipality = "Ringkøbing-Skjern") %>% rename(adresse = LEVERANDOR),
+  sb = sb %>% dplyr::select(geometry, VEJNAVN) %>% mutate(municipality = "Silkeborg") %>% rename(adresse = VEJNAVN),
+  vhl = vhl %>% dplyr::select(geometry, Adresse) %>% mutate(municipality = "Vesthimmerland") %>% rename(adresse = Adresse)
+)
+
+datasets <- lapply(datasets, function(df) {
+  df <- st_transform(df, 4326)
+  df <- st_make_valid(df)
+  df$geometry <- st_centroid(df$geometry)
+  return(df)
+})
+
+# Combine
+playgrounds <- do.call(rbind, datasets)
+playgrounds <- st_cast(playgrounds, "POINT")
+playgrounds$longitude <- st_coordinates(playgrounds)[,1]
+playgrounds$latitude <- st_coordinates(playgrounds)[,2]
+
+```
+
+```{r}
+# Load CSVs
+income <- read.csv("data/income.csv")
+population <- read.csv("data/Child014_Population.csv")
+
+# Normalize names
+normalize <- function(x) {
+  x <- gsub("-", " ", x)
+  x <- gsub("æ", "ae", x)
+  x <- gsub("ø", "oe", x)
+  x <- gsub("å", "aa", x)
+  x <- gsub("Æ", "Ae", x)
+  x <- gsub("Ø", "Oe", x)
+  x <- gsub("Å", "Aa", x)
+  x
+}
+
+income$municipality <- normalize(income$municipality)
+population$municipality <- normalize(population$municipality)
+
+# Load GADM
+gadm(country = "DNK", path = "data", level = 2)
+muni <- readRDS("data/gadm/gadm41_DNK_2_pk.rds") %>% 
+  st_as_sf() %>% 
+  st_transform(4326)
+muni$NAME_2 <- normalize(muni$NAME_2)
+
+# Join
+muni_income <- muni %>%
+  left_join(income, by = c("NAME_2" = "municipality")) %>%
+  rename(municipality = NAME_2) %>%
+  dplyr::select(municipality, geometry, income)
+
+muni_population <- muni %>%
+  left_join(population, by = c("NAME_2" = "municipality")) %>%
+  rename(municipality = NAME_2) %>%
+  dplyr::select(municipality, geometry, child_population) %>%
+  mutate(population = as.numeric(gsub(" ", "", child_population)))
+
+```
+
+```{r}
+saveRDS(playgrounds, "data/playgrounds_clean.rds")
+saveRDS(muni_income, "data/muni_income.rds")
+saveRDS(muni_population, "data/muni_population.rds")
+```
+
+Initial Plotting
+```{r}
+# plot municipality by income
+pal <- colorBin(palette = "OrRd", domain = muni_income$income, bins = 8)
+
+leaflet(muni_income) %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  # add income
+  addPolygons(fillColor = ~pal(income),
+              color = "#444444",
+              weight = 1,
+              fillOpacity = 0.5,
+              popup = ~paste(municipality, "<br>Income:", income)) %>%
+  addLegend(pal = pal, values = ~income, opacity = 0.7,
+            title = "Income",
+            position = "bottomright") %>% 
+  # add playgrounds
+  addCircleMarkers(data = playgrounds, lng = ~longitude, lat = ~latitude, radius = 0.5,
+                   label = ~paste(municipality),
+                   color = "darkblue", fillOpacity = 0.5)
+```
+
+```{r}
+
+# Plot municipality population
+pal <- colorBin(palette = "OrRd", domain = muni_population$child_population, bins = 8)
+
+leaflet(muni_population) %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  # add population
+  addPolygons(fillColor = ~pal(child_population),
+              color = "#444444",
+              weight = 1,
+              fillOpacity = 0.5,
+              popup = ~paste(municipality, "<br>Child Population:", child_population)) %>%
+  addLegend(pal = pal, values = ~child_population, opacity = 0.7,
+            title = "Child Population",
+            position = "bottomright") %>% 
+  # add playgrounds
+  addCircleMarkers(data = playgrounds, lng = ~longitude, lat = ~latitude, radius = 0.5,
+                   label = ~paste(municipality),
+                   color = "darkblue", fillOpacity = 0.5)
+```
+
