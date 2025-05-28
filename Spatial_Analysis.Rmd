@@ -586,7 +586,7 @@ ggsave("output/comparison_stats/pct_increase_coverage.png", plot = p18, width = 
 
 # 2. Compare % coverage from walking to cycling
 p19 <- ggplot(long_covered, aes(x = reorder(municipality, -covered_pct), y = covered_pct, fill = mode)) +
-  geom_bar(stat = "identity", position = "dodge", alpha = 0.5) +
+  geom_bar(stat = "identity", position = "dodge", alpha = 0.6) +
   labs(title = "Coverage Comparison: 5-minute Walking vs 5-minute Cycling Isochrones",
        x = "Municipality",
        y = "Coverage (%)",
