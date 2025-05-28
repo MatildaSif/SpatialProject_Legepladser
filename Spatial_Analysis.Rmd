@@ -386,6 +386,42 @@ p12 <-  ggplot(walking_coverage_data_2, aes(x = income, y = uncovered_child_coun
        x = "Mean Income", y = "Estimated Child Population in Uncovered Areas")
 
 ggsave("output/walking_stats/6_uncovered_child_vs_income.png", plot = p12, width = 8, height = 6)
+
+```
+
+# Plot Walking Isochrone with child density
+```{r}
+
+isochrone_density <- left_join(muni_population, walking_coverage_data, by = "municipality")
+
+pal2 <- colorBin(palette = "OrRd", domain = isochrone_density$child_density, bins = 6)
+
+
+leaflet(isochrone_density) %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  # add population
+  addPolygons(fillColor = ~pal2(isochrone_density$child_density),
+              color = "white",
+              weight = 1,
+              fillOpacity = 0.3,
+              popup = ~paste(municipality, "<br>Child Density:", child_density)) %>%
+  addLegend(pal = pal2, values = ~child_density, opacity = 0.5,
+            title = "Child Density",
+            position = "bottomright") %>% 
+# uncomment code below to add cycling isochrones
+    # addPolygons(data = cycling_isos,   
+    #           fillColor = "dodgerblue",
+    #           fillOpacity = 0.3,
+    #           stroke = FALSE) %>%
+    addPolygons(data = walking_isos,
+              fillColor = "deeppink",
+              fillOpacity = 0.4,
+              stroke = FALSE) %>% 
+    # add playground markers
+  addCircleMarkers(data = playgrounds, lng = ~longitude, lat = ~latitude, radius = 0.1,
+                   label = ~paste(municipality),
+                   color = "darkblue", fillOpacity = 1) %>% 
+    addScaleBar(position = "topright", options = scaleBarOptions(metric = TRUE, imperial = FALSE))
 ```
 
 
@@ -550,7 +586,7 @@ ggsave("output/comparison_stats/pct_increase_coverage.png", plot = p18, width = 
 
 # 2. Compare % coverage from walking to cycling
 p19 <- ggplot(long_covered, aes(x = reorder(municipality, -covered_pct), y = covered_pct, fill = mode)) +
-  geom_bar(stat = "identity", position = "identity", alpha = 0.5) +
+  geom_bar(stat = "identity", position = "dodge", alpha = 0.5) +
   labs(title = "Coverage Comparison: 5-minute Walking vs 5-minute Cycling Isochrones",
        x = "Municipality",
        y = "Coverage (%)",
